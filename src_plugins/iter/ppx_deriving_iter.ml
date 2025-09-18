@@ -45,6 +45,7 @@ let rec expr_of_typ typ =
     | _ -> assert false
     end
   | { ptyp_desc = Ptyp_tuple typs } ->
+      let typs = List.map snd typs in
     [%expr fun [%p ptuple (List.mapi (fun i _ -> pvar (argn i)) typs)] ->
       [%e Ppx_deriving.(fold_exprs seq_reduce
             (List.mapi (fun i typ -> app (expr_of_typ typ) [evar (argn i)]) typs))]];
@@ -68,9 +69,10 @@ let rec expr_of_typ typ =
                        deriver (Ppx_deriving.string_of_core_type typ))
     in
     Exp.function_ cases
-  | { ptyp_desc = Ptyp_var name } -> [%expr ([%e evar ("poly_"^name)] : [%t Typ.var name] -> unit)]
-  | { ptyp_desc = Ptyp_alias (typ, name) } ->
-    [%expr fun x -> [%e evar ("poly_"^name.txt)] x; [%e expr_of_typ typ] x]
+  | { ptyp_desc = Ptyp_var (name, _) } -> [%expr ([%e evar ("poly_"^name)] : [%t Typ.var name] -> unit)]
+  | { ptyp_desc = Ptyp_alias (typ, name, _) } ->
+     let name = Option.map (fun v -> "poly_" ^ v.txt) name |> Option.value ~default:"poly" in
+    [%expr fun x -> [%e evar name] x; [%e expr_of_typ typ] x]
   | { ptyp_loc } ->
     raise_errorf ~loc:ptyp_loc "%s cannot be derived for %s"
                  deriver (Ppx_deriving.string_of_core_type typ)
@@ -88,6 +90,7 @@ let str_of_type ({ ptype_loc = loc } as type_decl) =
       List.map (fun { pcd_name = { txt = name' }; pcd_args } ->
         match pcd_args with
         | Pcstr_tuple(typs) ->
+          let typs = List.map (fun v -> v.pca_type) typs in
           let args = List.mapi (fun i typ -> app (expr_of_typ typ) [evar (argn i)]) typs in
           let result =
             match args with

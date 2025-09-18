@@ -127,12 +127,12 @@ type deriver = {
                           path:string list ->
                           module_type_declaration -> structure;
   type_decl_sig : options:(string * expression) list -> path:string list ->
-                   type_declaration list -> signature;
+                   type_declaration list -> signature_item list;
   type_ext_sig : options:(string * expression) list -> path:string list ->
-                  type_extension -> signature;
+                  type_extension -> signature_item list;
   module_type_decl_sig : options:(string * expression) list ->
                           path:string list ->
-                          module_type_declaration -> signature;
+                          module_type_declaration -> signature_item list;
 }
 
 type Ppx_derivers.deriver += T of deriver
@@ -425,8 +425,8 @@ let mkloc = Ocaml_common.Location.mkloc
 let fold_left_type_params fn accum params =
   List.fold_left (fun accum (param, _) ->
       match param with
-      | { ptyp_desc = Ptyp_any } -> accum
-      | { ptyp_desc = Ptyp_var name } ->
+      | { ptyp_desc = Ptyp_any _ } -> accum
+      | { ptyp_desc = Ptyp_var (name, _) } ->
         let name = mkloc name param.ptyp_loc in
         fn accum name
       | _ -> assert false)
@@ -441,8 +441,8 @@ let fold_left_type_ext fn accum { ptyext_params } =
 let fold_right_type_params fn params accum =
   List.fold_right (fun (param, _) accum ->
       match param with
-      | { ptyp_desc = Ptyp_any } -> accum
-      | { ptyp_desc = Ptyp_var name } ->
+      | { ptyp_desc = Ptyp_any _ } -> accum
+      | { ptyp_desc = Ptyp_var (name, _) } ->
         let name = mkloc name param.ptyp_loc in
         fn name accum
       | _ -> assert false)
@@ -457,16 +457,20 @@ let fold_right_type_ext fn { ptyext_params } accum =
 let free_vars_in_core_type typ =
   let rec free_in typ =
     match typ with
-    | { ptyp_desc = Ptyp_any } -> []
-    | { ptyp_desc = Ptyp_var name } ->
+    | { ptyp_desc = Ptyp_any _ } -> []
+    | { ptyp_desc = Ptyp_var (name, _) } ->
       [mkloc name typ.ptyp_loc]
-    | { ptyp_desc = Ptyp_arrow (_, x, y) } -> free_in x @ free_in y
-    | { ptyp_desc = (Ptyp_tuple xs | Ptyp_constr (_, xs)) } ->
+    | { ptyp_desc = Ptyp_arrow (_, x, y, _m1, _m2) } -> free_in x @ free_in y
+    | { ptyp_desc = Ptyp_tuple xs } ->
+       let xs = List.map snd xs in
       List.map free_in xs |> List.concat
-    | { ptyp_desc = Ptyp_alias (x, name) } ->
+    | { ptyp_desc = Ptyp_constr (_, xs) } ->
+      List.map free_in xs |> List.concat
+    | { ptyp_desc = Ptyp_alias (x, Some name, _) } ->
       [mkloc name.txt typ.ptyp_loc]
       @ free_in x
     | { ptyp_desc = Ptyp_poly (bound, x) } ->
+      let bound = List.map fst bound in
       List.filter (fun y -> not (List.mem y bound)) (free_in x)
     | { ptyp_desc = Ptyp_variant (rows, _, _) } ->
       List.map (
@@ -591,7 +595,7 @@ let derive path pstr_loc item attributes fn arg =
     match deriving with
     | Some (PStr [{ pstr_desc = Pstr_eval (
                     { pexp_desc = Pexp_tuple exprs }, []); pstr_loc }]) ->
-      exprs, pstr_loc
+      List.map snd exprs, pstr_loc
     | Some (PStr [{ pstr_desc = Pstr_eval (
                     { pexp_desc = (Pexp_ident _ | Pexp_apply _) } as expr, []); pstr_loc }]) ->
       [expr], pstr_loc
@@ -755,7 +759,7 @@ class mapper = object (self)
       in derived :: self#structure rest
     | [] -> []
 
-  method! signature items =
+  method! signature_items items =
     match items with
     | { psig_desc = Psig_type(_, typ_decls); psig_loc } as item :: rest when
         List.exists (fun ty -> has_attr "deriving" ty.ptype_attributes)
@@ -764,37 +768,37 @@ class mapper = object (self)
         Ast_helper.with_default_loc psig_loc (fun () ->
           derive_type_decl module_nesting typ_decls psig_loc item
             (fun deriver -> deriver.type_decl_sig))
-      in derived @ self#signature rest
+      in derived @ self#signature_items rest
     | { psig_desc = Psig_typext typ_ext; psig_loc } as item :: rest when
         has_attr "deriving" typ_ext.ptyext_attributes ->
       let derived =
         Ast_helper.with_default_loc psig_loc (fun () ->
           derive_type_ext module_nesting typ_ext psig_loc item
                (fun deriver -> deriver.type_ext_sig))
-      in derived @ self#signature rest
+      in derived @ self#signature_items rest
     | { psig_desc = Psig_modtype modtype; psig_loc } as item :: rest when
         has_attr "deriving" modtype.pmtd_attributes ->
       let derived =
         Ast_helper.with_default_loc psig_loc (fun () ->
           derive_module_type_decl module_nesting modtype psig_loc item
             (fun deriver -> deriver.module_type_decl_sig))
-      in derived @ self#signature rest
+      in derived @ self#signature_items rest
     | { psig_desc = Psig_module ({ pmd_name = { txt = name } } as md) } as item :: rest ->
       let derived =
         { item with psig_desc = Psig_module (
             with_module name
               (fun () -> self#module_declaration md)) }
-      in derived :: self#signature rest
+      in derived :: self#signature_items rest
     | { psig_desc = Psig_recmodule mds } as item :: rest ->
       let derived =
         { item with psig_desc = Psig_recmodule (
             mds |> List.map (fun ({ pmd_name = { txt = name } } as md) ->
               with_module name
                 (fun () -> self#module_declaration md))) }
-      in derived :: self#signature rest
+      in derived :: self#signature_items rest
     | { psig_loc } as item :: rest ->
       let derived = self#signature_item item
-      in derived :: self#signature rest
+      in derived :: self#signature_items rest
     | [] -> []
 end
 

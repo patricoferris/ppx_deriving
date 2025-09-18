@@ -150,6 +150,7 @@ let rec expr_of_typ quoter typ =
       | _ -> assert false
       end
     | { ptyp_desc = Ptyp_tuple typs } ->
+      let typs = List.map snd typs in
       let args = List.mapi (fun i typ -> app (expr_of_typ typ) [evar (argn i)]) typs in
       [%expr
         fun [%p ptuple (List.mapi (fun i _ -> pvar (argn i)) typs)] ->
@@ -179,8 +180,8 @@ let rec expr_of_typ quoter typ =
                          deriver (Ppx_deriving.string_of_core_type typ))
       in
       Exp.function_ cases
-    | { ptyp_desc = Ptyp_var name } -> [%expr [%e evar ("poly_"^name)] fmt]
-    | { ptyp_desc = Ptyp_alias (typ, _) } -> expr_of_typ typ
+    | { ptyp_desc = Ptyp_var (name, _) } -> [%expr [%e evar ("poly_"^name)] fmt]
+    | { ptyp_desc = Ptyp_alias (typ, _, _) } -> expr_of_typ typ
     | { ptyp_loc } ->
       raise_errorf ~loc:ptyp_loc "%s cannot be derived for %s"
                    deriver (Ppx_deriving.string_of_core_type typ)
@@ -225,6 +226,7 @@ let str_of_type ~with_path ~path ({ ptype_loc = loc } as type_decl) =
             Exp.case (pconstrrec name' (pattl labels))
                      (app (wrap_printer quoter printer) ([%expr fmt] :: args))
           | None, Pcstr_tuple(typs) ->
+            let typs = List.map (fun v -> v.pca_type) typs in
             let args =
               List.mapi (fun i typ -> app (expr_of_typ quoter typ) [evar (argn i)]) typs in
             let printer =

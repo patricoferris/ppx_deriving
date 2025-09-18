@@ -34,12 +34,12 @@ type deriver = {
                           path:string list ->
                           module_type_declaration -> structure;
   type_decl_sig : options:(string * expression) list -> path:string list ->
-                   type_declaration list -> signature;
+                   type_declaration list -> signature_items;
   type_ext_sig : options:(string * expression) list -> path:string list ->
-                  type_extension -> signature;
+                  type_extension -> signature_items;
   module_type_decl_sig : options:(string * expression) list ->
                           path:string list ->
-                          module_type_declaration -> signature;
+                          module_type_declaration -> signature_items;
 }
 
 (** [register deriver] registers [deriver] according to its [name] field. *)
@@ -59,17 +59,17 @@ val create :
   ?type_ext_str: (options:(string * expression) list -> path:string list ->
                    type_extension -> structure) ->
   ?type_ext_sig: (options:(string * expression) list -> path:string list ->
-                   type_extension -> signature) ->
+                   type_extension -> signature_items) ->
   ?type_decl_str: (options:(string * expression) list -> path:string list ->
                     type_declaration list -> structure) ->
   ?type_decl_sig: (options:(string * expression) list -> path:string list ->
-                    type_declaration list -> signature) ->
+                    type_declaration list -> signature_items) ->
   ?module_type_decl_str: (options:(string * expression) list ->
                            path:string list ->
                            module_type_declaration -> structure) ->
   ?module_type_decl_sig: (options:(string * expression) list ->
                            path:string list ->
-                           module_type_declaration -> signature) ->
+                           module_type_declaration -> signature_items) ->
   unit -> deriver
 
 (** [lookup name] looks up a deriver called [name]. *)

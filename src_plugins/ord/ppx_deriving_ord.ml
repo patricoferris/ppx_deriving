@@ -123,6 +123,7 @@ and expr_of_typ quoter typ =
       | _ -> assert false
       end
     | { ptyp_desc = Ptyp_tuple typs } ->
+        let typs = List.map snd typs in
       [%expr fun [%p ptuple (pattn `lhs typs)] [%p ptuple (pattn `rhs typs)] ->
         [%e exprn quoter typs |> reduce_compare]]
     | { ptyp_desc = Ptyp_variant (fields, _, _); ptyp_loc } ->
@@ -158,8 +159,8 @@ and expr_of_typ quoter typ =
       in
       [%expr fun lhs rhs ->
         [%e Exp.match_ [%expr lhs, rhs] (cases @ [wildcard_case int_cases])]]
-    | { ptyp_desc = Ptyp_var name } -> evar ("poly_"^name)
-    | { ptyp_desc = Ptyp_alias (typ, _) } -> expr_of_typ typ
+    | { ptyp_desc = Ptyp_var (name, _) } -> evar ("poly_"^name)
+    | { ptyp_desc = Ptyp_alias (typ, _, _) } -> expr_of_typ typ
     | { ptyp_loc } ->
       raise_errorf ~loc:ptyp_loc "%s cannot be derived for %s"
                    deriver (Ppx_deriving.string_of_core_type typ)
@@ -190,6 +191,7 @@ let str_of_type ({ ptype_loc = loc } as type_decl) =
         constrs |> List.map (fun { pcd_name = { txt = name }; pcd_args } ->
           match pcd_args with
           | Pcstr_tuple(typs) ->
+            let typs = List.map (fun v -> v.pca_type) typs in
             exprn quoter typs |> reduce_compare |>
             Exp.case (ptuple [pconstr name (pattn `lhs typs);
                               pconstr name (pattn `rhs typs)])

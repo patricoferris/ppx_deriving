@@ -49,7 +49,7 @@ let get_plugins () =
   | Some expr ->
       match From_current.copy_expression expr with
       | { pexp_desc = Pexp_tuple exprs } ->
-        exprs |> List.map (fun expr ->
+        exprs |> List.map (fun (_, expr) ->
           match expr with
           | { pexp_desc = Pexp_constant (Pconst_string (file, _, None)) } -> file
           | _ -> assert false)
@@ -76,9 +76,9 @@ let mapper argv =
           hd
         with
         | ([%stri [@@@findlib.ppxopt [%e? { pexp_desc = Pexp_tuple (
-            [%expr "ppx_deriving"] :: elems) }]]]) ->
+            (_, [%expr "ppx_deriving"]) :: elems) }]]]) ->
             elems |>
-            List.map (fun elem ->
+            List.map (fun (_, elem) ->
               match elem with
               | { pexp_desc = Pexp_constant (Pconst_string (file, _, None))} ->
                   file
